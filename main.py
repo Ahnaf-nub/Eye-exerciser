@@ -1,76 +1,69 @@
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import cv2
-import numpy as np
 
-eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+app = FastAPI()
 
-cap = cv2.VideoCapture(0)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
-prev_left_pupil = None
-prev_right_pupil = None
+movement_logs = []
 
-while True:
-    ret, frame = cap.read()
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    
-    eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5)
-    
-    # Iterate over the detected eyes
-    for (ex, ey, ew, eh) in eyes:
-        # Draw a rectangle around each eye
-        cv2.rectangle(frame, (ex, ey), (ex+ew, ey+eh), (255, 0, 0), 2)
-        
-        # Get the region of interest (ROI) in the grayscale image
-        roi_gray = gray[ey:ey+eh, ex:ex+ew]
-        roi_color = frame[ey:ey+eh, ex:ex+ew]
+def detect_movement(dx, dy):
+    if abs(dx) > 2 * abs(dy):  # More horizontal movement
+        return "Right" if dx > 0 else "Left"
+    elif abs(dy) > 2 * abs(dx):  # More vertical movement
+        return "Down" if dy > 0 else "Up"
+    else:
+        return "Straight"  # Little or no significant movement
 
-        # Use a threshold to binarize the image for pupil detection
-        _, threshold = cv2.threshold(roi_gray, 30, 255, cv2.THRESH_BINARY_INV)
-        
-        # Find contours in the thresholded image
-        contours, _ = cv2.findContours(threshold, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        
-        # Find the largest contour which should be the pupil
-        if contours:
-            largest_contour = max(contours, key=cv2.contourArea)
-            
-            # Get the center and radius of the pupil
-            (x, y), radius = cv2.minEnclosingCircle(largest_contour)
-            center = (int(x), int(y))
-            radius = int(radius)
-            
-            # Draw a circle around the pupil
-            cv2.circle(roi_color, center, radius, (0, 5, 0), 2)
+@app.get("/", response_class=HTMLResponse)
+async def get(request: Request):
+    global movement_logs
+    movement_logs.clear()
 
-            # Determine which eye is being processed (left or right)
-            if ex < frame.shape[1] // 2:
-                current_pupil = "left"
-                prev_pupil = prev_left_pupil
-                prev_left_pupil = center
-            else:
-                current_pupil = "right"
-                prev_pupil = prev_right_pupil
-                prev_right_pupil = center
+    cap = cv2.VideoCapture(0)
+    try:
+        _, frame = cap.read()
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+        eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
 
-            # Check the movement direction if previous pupil position exists
-            if prev_pupil is not None:
-                dx = center[0] - prev_pupil[0]
-                dy = center[1] - prev_pupil[1]
-                
-                if abs(dx) > abs(dy):  # Horizontal movement
-                    if dx > 0:
-                        direction = f"{current_pupil} pupil moving right"
-                    else:
-                        direction = f"{current_pupil} pupil moving left"
-                else:  # Vertical movement
-                    if dy > 0:
-                        direction = f"{current_pupil} pupil moving down"
-                    else:
-                        direction = f"{current_pupil} pupil moving up"
-                
-                cv2.putText(frame, direction, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        prev_left_pupil = None
+        prev_right_pupil = None
 
-    cv2.imshow('Pupil Tracking', frame)
-    if cv2.waitKey(1) & 0xFF == 27:
-        break
-cap.release()
-cv2.destroyAllWindows()
+        for (ex, ey, ew, eh) in eyes:
+            roi_gray = gray[ey:ey+eh, ex:ex+ew]
+            _, threshold = cv2.threshold(roi_gray, 30, 255, cv2.THRESH_BINARY_INV)
+            contours, _ = cv2.findContours(threshold, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+            if contours:
+                largest_contour = max(contours, key=cv2.contourArea)
+                (x, y), radius = cv2.minEnclosingCircle(largest_contour)
+                center = (int(x), int(y))
+
+                if ex < frame.shape[1] // 2:  # Left side of the frame
+                    current_pupil = "left"
+                    prev_pupil = prev_left_pupil
+                    prev_left_pupil = center
+                else:  # Right side of the frame
+                    current_pupil = "right"
+                    prev_pupil = prev_right_pupil
+                    prev_right_pupil = center
+
+                if prev_pupil is not None:
+                    dx = center[0] - prev_pupil[0]
+                    dy = center[1] - prev_pupil[1]
+
+                    direction = detect_movement(dx, dy)
+                    movement_logs.append(f"{current_pupil.capitalize()} pupil moving {direction}")
+    finally:
+        cap.release()
+
+    return templates.TemplateResponse("index.html", {"request": request, "logs": movement_logs})
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
