@@ -1,8 +1,25 @@
 import cv2
+import tkinter as tk
+from tkinter import Label
+from PIL import Image, ImageTk
 
+# Initialize the Tkinter window
+root = tk.Tk()
+root.title("Eye Exerciser")
+root.geometry("800x600")
+
+# Label to display the eye direction
+direction_label = Label(root, text="Direction: Straight", font=("Arial", 24))
+direction_label.pack()
+
+# Label to display the video feed
+video_label = Label(root)
+video_label.pack()
+
+# OpenCV eye cascade for detection
+eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
 camera = cv2.VideoCapture(0)
 
-eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
 prev_left_pupil = None
 prev_right_pupil = None
 current_direction = "Straight"
@@ -46,15 +63,21 @@ def detect_eyes(frame):
                 new_direction = detect_movement(dx, dy)
                 if new_direction != current_direction:
                     current_direction = new_direction
+                    direction_label.config(text=f"Direction: {current_direction}")
 
     return frame
 
-while True:
-    _, frame = camera.read()
-    frame = detect_eyes(frame)
-    cv2.putText(frame, current_direction, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    cv2.imshow("Eye Movement Detection", frame)
+def show_frame():
+    ret, frame = camera.read()
+    if ret:
+        frame = detect_eyes(frame)
+        cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+        img = Image.fromarray(cv2image)
+        imgtk = ImageTk.PhotoImage(image=img)
+        video_label.imgtk = imgtk
+        video_label.configure(image=imgtk)
+    video_label.after(10, show_frame)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+show_frame()
 
+root.mainloop()
