@@ -3,13 +3,12 @@ import tkinter as tk
 from tkinter import Label
 from PIL import Image, ImageTk
 
-# Initialize the Tkinter window
 root = tk.Tk()
 root.title("Eye Exerciser")
 root.geometry("800x600")
 
 # Label to display the eye direction
-direction_label = Label(root, text="Direction: Straight", font=("Arial", 24))
+direction_label = Label(root, text="Direction: Straight", font=("Arial", 25))
 direction_label.pack()
 
 # Label to display the video feed
@@ -25,18 +24,40 @@ prev_right_pupil = None
 current_direction = "Straight"
 
 def detect_movement(dx, dy):
-    if abs(dx) > abs(dy):  # More horizontal movement
-        return "Right" if dx > 0 else "Left"
-    elif abs(dy) > abs(dx):  # More vertical movement
-        return "Down" if dy > 0 else "Up"
+    if dx > abs(dy):  # More horizontal movement to the right
+        return "Right"
+    elif -dx > abs(dy):  # More horizontal movement to the left
+        return "Left"
+    elif dy > abs(dx):  # More vertical movement downwards
+        return "Down"
+    elif -dy > abs(dx):  # More vertical movement upwards
+        return "Up"
     else:
         return "Straight"  # Little or no significant movement
+    
+def check_eye_movement():
+    global current_direction
+    if current_direction == "Straight":
+        direction_label.config(text="Move your eye to the Right")
+        current_direction = "Right"
+    elif current_direction == "Right":
+        direction_label.config(text="Move your eye to the Left")
+        current_direction = "Left"
+    elif current_direction == "Left":
+        direction_label.config(text="Move your eye Down")
+        current_direction = "Down"
+    elif current_direction == "Down":
+        direction_label.config(text="Move your eye Up")
+        current_direction = "Up"
+    elif current_direction == "Up":
+        direction_label.config(text="Move your eye to the Right")
+        current_direction = "Right"
 
 def detect_eyes(frame):
     global prev_left_pupil, prev_right_pupil, current_direction
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    eyes = eye_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=6, minSize=(30, 30))
 
     for (ex, ey, ew, eh) in eyes:
         roi_gray = gray[ey:ey+eh, ex:ex+ew]
@@ -62,8 +83,9 @@ def detect_eyes(frame):
 
                 new_direction = detect_movement(dx, dy)
                 if new_direction != current_direction:
+                    check_eye_movement()
                     current_direction = new_direction
-                    direction_label.config(text=f"Direction: {current_direction}")
+                    direction_label.config(text=f"{current_direction}")
 
     return frame
 
@@ -79,5 +101,4 @@ def show_frame():
     video_label.after(10, show_frame)
 
 show_frame()
-
 root.mainloop()
