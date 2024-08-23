@@ -19,7 +19,7 @@ pip install tkinter opencv-python
 ```
 Run the Application:
 ```
-python eye_exerciser.py
+python main.py
 ```
 ### Usage
 Launch the application and follow the on-screen instructions to perform eye exercises.
