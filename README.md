@@ -10,12 +10,12 @@ Step-by-Step Guidance: Prompts users to move their eyes in different directions 
 ### Installation
 Clone the Repository:
 ```
-git clone https://github.com/yourusername/eye-exerciser.git
-cd eye-exerciser
+git clone https://github.com/Ahnaf-nub/Eye-exerciser.git
+cd Eye-exerciser
 ```
 **Install Dependencies**:
 ```
-pip install tkinter opencv-python
+pip install -r requirements.txt
 ```
 Run the Application:
 ```
